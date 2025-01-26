@@ -15,7 +15,9 @@ from typing import Optional
 
 import numpy as np
 import torch
-from fast_hadamard_transform import hadamard_transform
+if torch.cuda.is_available():
+    from fast_hadamard_transform import hadamard_transform
+
 from torch.distributed.fsdp import (
     FullStateDictConfig,
 )

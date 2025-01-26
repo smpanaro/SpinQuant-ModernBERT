@@ -17,11 +17,17 @@ class QuantizeLinear(nn.Linear):
         R1=None,
         R2=None,
         transpose=False,
+        residual=False,
     ) -> Tensor:
         # quantize weight
         if R1 is not None:
             dtype = self.weight.dtype
-            if not transpose:
+            if residual:
+                # See comment about the first LayerNorm in fuse_layer_norms.
+                weight = (R1.T.to(torch.float64) @ self.weight.to(torch.float64) @ R1.to(torch.float64)).to(
+                    dtype
+                )
+            elif not transpose:
                 weight = (self.weight.to(torch.float64) @ R1.to(torch.float64)).to(
                     dtype
                 )

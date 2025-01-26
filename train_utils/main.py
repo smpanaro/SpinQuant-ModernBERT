@@ -12,6 +12,7 @@ import transformers
 
 from train_utils import apply_r3_r4, rtn_utils
 from utils import fuse_norm_utils, hadamard_utils, quant_utils, utils
+import torch
 
 
 def prepare_model(args, model):
@@ -20,18 +21,20 @@ def prepare_model(args, model):
 
     # Rotate the weights
     fuse_norm_utils.fuse_layer_norms(model)
-    apply_r3_r4.rotate_model(model, args)
+    if torch.cuda.is_available():
+        apply_r3_r4.rotate_model(model, args)
     utils.cleanup_memory(verbos=True)
 
     quant_utils.add_actquant(model)  # Add Activation Wrapper to the model
     qlayers = quant_utils.find_qlayers(model)
-    for name in qlayers:
-        if "down_proj" in name:
-            had_K, K = hadamard_utils.get_hadK(model.config.intermediate_size)
-            qlayers[name].online_full_had = True
-            qlayers[name].had_K = had_K
-            qlayers[name].K = K
-            qlayers[name].fp32_had = args.fp32_had
+    if torch.cuda.is_available():
+        for name in qlayers:
+            if "down_proj" in name:
+                had_K, K = hadamard_utils.get_hadK(model.config.intermediate_size)
+                qlayers[name].online_full_had = True
+                qlayers[name].had_K = had_K
+                qlayers[name].K = K
+                qlayers[name].fp32_had = args.fp32_had
 
     if args.w_bits < 16:
         quantizers = rtn_utils.rtn_fwrd(model, "cuda", args)
