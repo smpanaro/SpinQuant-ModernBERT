@@ -7,12 +7,12 @@
 
 # nnodes determines the number of GPU nodes to utilize (usually 1 for an 8 GPU node)
 # nproc_per_node indicates the number of GPUs per node to employ.
-torchrun --nnodes=1 --nproc_per_node=8 optimize_rotation.py \
+torchrun --nnodes=1 --nproc_per_node=1 optimize_rotation.py \
 --input_model $1  \
---output_rotation_path "your_path" \
---output_dir "your_output_path/" \
---logging_dir "your_log_path/" \
---model_max_length 2048 \
+--output_rotation_path "outputs/rotations/$1/" \
+--output_dir "outputs/misc/$1/" \
+--logging_dir "outputs/logs/$1/" \
+--model_max_length 8192 \
 --fp16 False \
 --bf16 True \
 --log_on_each_node False \
@@ -34,3 +34,11 @@ torchrun --nnodes=1 --nproc_per_node=8 optimize_rotation.py \
 --v_asym \
 --k_groupsize 128 \
 --v_groupsize 128 \
+--ddp_find_unused_parameters True
+
+# ddp_find_unused_parameters somehow gets rid of an error about unused parameters.
+# Something fishy about that, but it does seem to be working-ish (R1 changes).
+
+# Example usage:
+# bash scripts/10_optimize_rotation.sh answerdotai/ModernBERT-base 16 16 16
+# NOTE: Some quantization is required for optimization to be effective, see Appendix B.1.

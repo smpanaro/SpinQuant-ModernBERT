@@ -13,11 +13,11 @@ import datasets
 import torch
 import torch.distributed as dist
 from torch import nn
-from transformers import LlamaTokenizerFast, Trainer, default_data_collator
+from transformers import AutoTokenizer, Trainer, default_data_collator
 import transformers
 from train_utils.fsdp_trainer import FSDPTrainer
 from train_utils.main import prepare_model
-from train_utils.modeling_llama_quant import LlamaForCausalLM as LlamaForCausalLMQuant
+from train_utils.modeling_modernbert_quant import ModernBertForMaskedLM as ModernBertForMaskedLMQuant
 from train_utils.optimizer import SGDG
 from utils.data_utils import CustomJsonDataset
 from utils.hadamard_utils import random_hadamard_matrix
@@ -43,28 +43,30 @@ def train() -> None:
     dist.init_process_group(backend="nccl", timeout=datetime.timedelta(hours=8))
     model_args, training_args, ptq_args = process_args_ptq()
     local_rank = get_local_rank()
+    world_size = dist.get_world_size()
 
-    log.info("the rank is {}".format(local_rank))
+    log.info("the rank is {}. world size is {}".format(local_rank, world_size))
     torch.distributed.barrier()
 
     config = transformers.AutoConfig.from_pretrained(
         model_args.input_model, token=model_args.access_token
     )
 
-    # Llama v3.2 specific: Spinquant is not compatiable with tie_word_embeddings, clone lm_head from embed_tokens
+    # Llama v3.2 + ModernBERT specific: Spinquant is not compatiable with tie_word_embeddings, clone lm_head from embed_tokens
     process_word_embeddings = False
     if config.tie_word_embeddings:
         config.tie_word_embeddings = False
         process_word_embeddings = True
+    config.loss_type = 'ForMaskedLM'
     dtype = torch.bfloat16 if training_args.bf16 else torch.float16
-    model = LlamaForCausalLMQuant.from_pretrained(
+    model = ModernBertForMaskedLMQuant.from_pretrained(
         pretrained_model_name_or_path=model_args.input_model,
         config=config,
         torch_dtype=dtype,
         token=model_args.access_token,
     )
     if process_word_embeddings:
-        model.lm_head.weight.data = model.model.embed_tokens.weight.data.clone()
+        model.decoder.weight.data = model.model.embeddings.tok_embeddings.weight.data.clone()
 
     model = prepare_model(ptq_args, model)
     for param in model.parameters():
@@ -76,18 +78,15 @@ def train() -> None:
         R2 = random_hadamard_matrix(
             model.config.hidden_size // model.config.num_attention_heads, "cuda"
         )
-        model.model.layers[i].self_attn.R2 = RotateModule(R2)
+        model.model.layers[i].attn.R2 = RotateModule(R2)
     if local_rank == 0:
         log.info("Model init completed for training {}".format(model))
         log.info("Start to load tokenizer...")
-    tokenizer = LlamaTokenizerFast.from_pretrained(
+    tokenizer = AutoTokenizer.from_pretrained(
         pretrained_model_name_or_path=model_args.input_model,
         cache_dir=training_args.cache_dir,
         model_max_length=training_args.model_max_length,
-        padding_side="right",
         use_fast=True,
-        add_eos_token=False,
-        add_bos_token=False,
         token=model_args.access_token,
     )
     log.info("Complete tokenizer loading...")
@@ -98,11 +97,11 @@ def train() -> None:
     train_data = CustomJsonDataset(
         calibration_datasets["train"],
         tokenizer,
-        block_size=min(training_args.model_max_length, 2048),
+        block_size=min(training_args.model_max_length, 8192),
     )
 
     trainable_parameters = [model.R1.weight] + [
-        model.model.layers[i].self_attn.R2.weight
+        model.model.layers[i].attn.R2.weight
         for i in range(model.config.num_hidden_layers)
     ]
     model.seqlen = training_args.model_max_length

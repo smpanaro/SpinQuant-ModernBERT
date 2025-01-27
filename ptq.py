@@ -31,7 +31,7 @@ def train() -> None:
     config = transformers.AutoConfig.from_pretrained(
         model_args.input_model, token=model_args.access_token
     )
-    # Llama v3.2 specific: Spinquant is not compatiable with tie_word_embeddings, clone lm_head from embed_tokens
+    # Llama v3.2 + ModernBERT specific: Spinquant is not compatiable with tie_word_embeddings, clone lm_head from embed_tokens
     process_word_embeddings = False
     if config.tie_word_embeddings:
         config.tie_word_embeddings = False

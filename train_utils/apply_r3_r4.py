@@ -23,7 +23,7 @@ from utils.utils import HadamardTransform
 
 def R4_rotate_down_proj_weights(layer):
     # Rotate the MLP output weights and bias.
-    W = layer.mlp.down_proj
+    W = layer.mlp.Wo
     apply_exact_had_to_linear(
         W, had_dim=-1, output=False
     )  # apply exact (inverse) hadamard on the weights of mlp output

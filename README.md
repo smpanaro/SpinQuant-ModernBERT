@@ -1,5 +1,11 @@
 # SpinQuant
 
+> [!Important]
+> This fork of SpinQuant updates it to generate the R1 matrix for ModernBERT.
+> 1. Llama models are _not_ supported on this branch.
+> 2. R2 is also not currently supported since the QKV weight is combined.
+> 3. The results of using the optimized R1 have not been tested. (The changes are small. Look at the diffs.)
+
 This repository contains the code of SpinQuant introduced in our work: "[SpinQuant: LLM Quantization with Learned Rotations](https://arxiv.org/pdf/2405.16406)"
 
 In this work, we found that 

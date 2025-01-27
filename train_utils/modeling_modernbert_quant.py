@@ -993,7 +993,7 @@ class ModernBertModel(ModernBertPreTrainedModel):
                     cu_seqlens,
                     max_seqlen,
                     output_attentions,
-                    R1=R1,
+                    R1,
                 )
             else:
                 layer_outputs = encoder_layer(
